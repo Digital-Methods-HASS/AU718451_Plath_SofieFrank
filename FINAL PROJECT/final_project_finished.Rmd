@@ -1,0 +1,298 @@
+---
+title: "Final project DM"
+author: "Sofie Frank Plath"
+date: "2023-11-24"
+output:
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Library packages
+
+installing the needed packages for creating maps with leaflet
+```{r packages, echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(tidyverse)
+library(googlesheets4)
+library(leaflet)
+library(htmlwidgets)
+library(scales)
+```
+
+# Exspectation of the project
+Wanting to show the Queens of the Royal houses of: Denmark, England, France and the Land of Rus in the years 1050-1250
+
+examining whether there is a tendency or not, that queens came from different places than the country they were queens in.   
+
+# Maps over queens
+
+## Making a map over the queens in midieval Europe 1050-1250
+Countries are: House of Denmark, House of France, House of England and the House of the land of Rus
+
+Using leaflet to check if im seeing a map over europe
+
+Latitude: 53° 0000º N
+Longitude: 9° 0000º E
+Data is found from https://www.mapsofworld.com/lat_long/europe.html
+
+```{r leaflet}
+leaflet()%>% 
+  setView(9.0,53.0 , zoom = 3.5)%>%
+  addTiles()  
+```
+
+We are seeing europe.
+—
+
+Afterwards creating a basemap
+```{r basemap}
+eu_1 <- leaflet()%>% 
+  setView(9.0,53.0 , zoom = 3.5)
+
+```
+
+Choosing esri background layers
+```{r esri layers}
+esri <- grep("^Esri", providers, value = TRUE)
+
+for (provider in esri)
+{eu_1 <-eu_1 %>% addProviderTiles(provider, group = provider)}
+
+```
+
+### Creating the object QUEENmap
+
+```{r creating QUEENmap}
+QUEENmap <- eu_1 %>%
+  addLayersControl(baseGroups = names(esri),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addMiniMap(tiles = esri[[1]], toggleDisplay = TRUE,
+             position = "bottomright") %>%
+  addMeasure(
+    position = "bottomleft",
+    primaryLengthUnit = "meters",
+    primaryAreaUnit = "sqmeters",
+    activeColor = "#3D535D",
+    completedColor = "#7D4479") %>% 
+  htmlwidgets::onRender("
+                        function(el, x) {
+                        var myMap = this;
+                        myMap.on('baselayerchange',
+                        function (e) {
+                        myMap.minimap.changeLayer(L.tileLayer.provider(e.name));
+                        })
+                        }") %>% 
+  addControl("", position = "topright")
+QUEENmap
+```
+object QUEENmap was created
+
+### Populating with queen data into the QUEENmap object
+
+Using read_sheet to read the data
+
+```{r Google sheet reading}
+gs4_deauth()
+queens_data <- read_sheet("https://docs.google.com/spreadsheets/d/1fr8zYhVYE1PgGzcZaFs3mrSkIL0ra4dirbCt8if1A9I/edit#gid=0",
+                     col_types = "cccnnlccccc", range="queens_data")
+glimpse(queens_data)
+
+```
+data is loading
+
+#### Changing data from characters to nummeric
+```{r data change from chr to num}
+queens_data$latitude_origin <- as.numeric(queens_data$latitude_origin)
+class(queens_data$latitude_origin)
+
+queens_data$longitude_origin <- as.numeric(queens_data$longitude_origin)
+class(queens_data$longitude_origin)
+
+queens_data$latitude_queen <- as.numeric(queens_data$latitude_queen)
+class(queens_data$latitude_queen)
+
+queens_data$longitude_queen <- as.numeric(queens_data$longitude_queen)
+class(queens_data$longitude_queen)
+```
+#### Filtering away the NA in the origin countries of the queens
+```{r filter na}
+queens_data[queens_data == "NA"] <- NA
+```
+
+Some queens occur more than ones, while battles of power frequently played out in Europe 1050-1250. This is true for the queens, Agnes(Germany) - Of the Land of RUS and, Helena(Turky) - Of the Land of Rus, Agnes of Poland(Poland) - Of the Land of Rus. We dont want them to appear more than ones on the map, while they are queens in the same country twice. We don't want to filter away queens who are queens in different country such as Elanor of Aquiaine
+```{r remove duplicates - queens ruling in the same country twice}
+queens_data_filtered <- queens_data[!duplicated(queens_data[c("name_queen","queenly_status_country")], fromLast = TRUE), ]
+```
+
+
+now time to load in the coordinates in the leaflet map
+#### Loading the coordinates over queens and their origin country
+
+```{r coordinates}
+leaflet() %>% 
+  addTiles() %>% 
+  addMarkers(lng = queens_data_filtered$longitude_origin, 
+             lat = queens_data_filtered$latitude_origin,
+             popup = queens_data_filtered$name_queen)
+```
+
+
+loading the coordinates with the name of the queens. while there a more queens on the map only a few are visible at the moment. 
+
+Clustering the points in leaflet
+
+## Map1: Midieval queens: shown by their origin country
+```{r clustering the points from origin country}
+QUEENmap %>%
+  addMarkers(lng = queens_data$longitude_origin, 
+             lat = queens_data$latitude_origin,
+             popup = paste("Name:",queens_data$name_queen, "<br>Queen in:",queens_data$queenly_status_country,"<br>From:", queens_data$origin_country,"<br>Queen in origin country:",queens_data_filtered$queenly_status_origin_country),
+             clusterOptions = markerClusterOptions())
+```
+
+the clustering of the queens in there queenly destination works. Now all queens appear on the map, found in their origin country. 
+
+## Map2: Midieval queens: shown by their queenly status country 
+
+Loading and clustering the coordinates over queens and where they were queens
+loading the coordinates with the name of the queens. while there a more queens on the map only a few are visible at the moment. 
+
+Clustering the points in leaflet
+
+```{r clustering the points from queen status}
+QUEENmap %>%
+  addMarkers(lng = queens_data_filtered$longitude_queen, 
+             lat = queens_data_filtered$latitude_queen,
+             popup = paste("Name:",queens_data_filtered$name_queen, "<br>Queen in:",queens_data_filtered$queenly_status_country,"<br>From:", queens_data_filtered$origin_country, "<br>Queen in origin country:",queens_data_filtered$queenly_status_origin_country),
+             clusterOptions = markerClusterOptions())
+```
+clustering our queens, makes it possible for us to click and view the names of every queen from the period 1050-1250. 
+Different informations are available if you click the queen, you will be able to see: The queens name, if she was queen in her origin country, what her origin country was. Here the queens are shown as queen consorts in their royal houses. 
+
+### Changing the colour of the markers to indicate were the queens ruled
+
+```{r colourcoding the origin countries}
+pal <- colorFactor(palette = "Set1", domain = queens_data_filtered$queenly_status_country)
+leaflet(queens_data_filtered) %>% addTiles() %>% addCircleMarkers(~longitude_origin, ~latitude_origin, color = ~pal(queenly_status_country))  
+
+```
+
+The colors are changing but it is not giving us a better understanding to where the queens came from. The idea was that there would be four colors indicating queens from the four royal houses. The colors are mashing up against each other though, so it is not a pretty visualization, and can probably not be used to much. 
+
+# Statistics over queens in midieval Europe. 
+
+##European queens origin country
+```{r graph over queens from countries}
+ggplot(queens_data_filtered, aes(x= origin_country)) +
+  geom_bar(aes(fill = ..count..))+
+  labs(title = "European queens from contries: 1050-1250") + 
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5))+
+  labs(x = "Country", y = "Number of queens per country") +
+  labs(color = "Country") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5, size = 3)
+ggsave("queens_countries.png")
+```
+```{r countries individual analysis}
+ggplot(queens_data_filtered, aes(x = queenly_status_country, fill = origin_country)) +
+  geom_bar(data = subset(queens_data_filtered, queenly_status_country == "Denmark"), stat = "count", position = "dodge", width = 0.8)+
+  labs(title = "Queens in Denmark: 1050-1250") + 
+  labs(x = "Different origin country in danish queens", y = "Queens per country") +
+    labs(fill = "Origin Country")+
+ theme(legend.position = "bottom")
+ggsave("queens_denmark.png")
+
+ggplot(queens_data_filtered, aes(x = queenly_status_country, fill = origin_country)) +
+  geom_bar(data = subset(queens_data_filtered, queenly_status_country == "England"), stat = "count", position = "dodge", width = 0.8)+
+  labs(title = "Queens in England: 1050-1250") + 
+  labs(x = "Different origin country in english queens", y = "Queens per country") +
+    labs(fill = "Origin Country")+
+ theme(legend.position = "bottom")
+ggsave("queens_england.png")
+  
+ggplot(queens_data_filtered, aes(x = queenly_status_country, fill = origin_country)) +
+  geom_bar(data = subset(queens_data_filtered, queenly_status_country == "The Land of Rus"), stat = "count", position = "dodge", width = 0.8)+
+  labs(title = "Queens in The Land of Rus: 1050-1250") + 
+  labs(x = "Different origin country in slavic queens", y = "Queens per country") +
+    labs(fill = "Origin Country")+
+ theme(legend.position = "bottom")
+ggsave("queens_rus.png")
+
+ ggplot(queens_data_filtered, aes(x = queenly_status_country, fill = origin_country)) +
+  geom_bar(data = subset(queens_data_filtered, queenly_status_country == "France"), stat = "count", position = "dodge", width = 0.8)+
+  labs(title = "Queens in France: 1050-1250") + 
+  labs(x = "Different origin country in french queens", y = "Queens per country") +
+  labs(fill = "Origin Country")+
+ theme(legend.position = "bottom")
+ ggsave("queens_france.png")
+```
+
+```{r true false ruling}
+queens_data_filtered %>% count(queenly_status_origin_country)
+
+ggplot(queens_data_filtered, aes(x = queenly_status_origin_country,fill = queenly_status_origin_country)) +
+  geom_bar(stat = "count", position = "dodge", width = 0.8)+
+  coord_cartesian(ylim = c(0, 40)) +
+  labs(title = "Queens ruling in their origin country: 1050-1250") + 
+  labs(x = "European queens, house: Denmark, England, The Land of Rus, France", y = "Queens status") +
+  labs(fill = "Data") +
+  geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.5, size = 3) 
+ggsave("true_false_queens.png")
+```
+This graph shows that the queens seldom are queen consorts in their origin country
+
+```{r queens timelines}
+#making objects over each of the royal houses
+denmark_queens <- queens_data[queens_data$queenly_status_country == "Denmark", ]
+england_queens <- queens_data[queens_data$queenly_status_country == "England", ]
+rus_queens <- queens_data[queens_data$queenly_status_country == "The Land of Rus", ]
+france_queens <- queens_data[queens_data$queenly_status_country == "France", ]
+
+#Making an individual timeline over each country
+ggplot(denmark_queens, aes(x = start_year_queen, y = name_queen)) +
+  geom_point(aes(color = name_queen), size = 4) +
+  geom_segment(aes(xend = end_year_queen, yend = name_queen), size = 1, color = "black") +
+  labs(title = "Timeline: Danish Queens 1050-1250",
+       x = "Year",
+       y = "Queens' Names") +
+  theme_linedraw()+
+  guides(color = FALSE)
+ggsave("timeline_denmark.png")
+
+ggplot(england_queens, aes(x = start_year_queen, y = name_queen)) +
+  geom_point(aes(color = name_queen), size = 4) +
+  geom_segment(aes(xend = end_year_queen, yend = name_queen), size = 1, color = "black") +
+  labs(title = "Timeline: English Queens 1050-1250",
+       x = "Year",
+       y = "Queens' Names") +
+  theme_linedraw()+
+  guides(color = FALSE)
+ggsave("timeline_england.png")
+
+ggplot(rus_queens, aes(x = start_year_queen, y = name_queen)) +
+  geom_point(aes(color = name_queen), size = 4) +
+  geom_segment(aes(xend = end_year_queen, yend = name_queen), size = 1, color = "black") +
+  labs(title = "Timeline: Slavic Queens 1050-1250",
+       x = "Year",
+       y = "Queens' Names") +
+  theme_linedraw()+
+  guides(color = FALSE)
+ggsave("timeline_rus.png")
+
+ggplot(france_queens, aes(x = start_year_queen, y = name_queen)) +
+  geom_point(aes(color = name_queen), size = 4) +
+  geom_segment(aes(xend = end_year_queen, yend = name_queen), size = 1, color = "black") +
+  labs(title = "Timeline: French Queens 1050-1250",
+       x = "Year",
+       y = "Queens' Names") +
+  theme_linedraw()+
+  guides(color = FALSE)
+ggsave("timeline_france.png")
+  
+```
+
+
