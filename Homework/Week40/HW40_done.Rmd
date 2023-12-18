@@ -1,0 +1,185 @@
+---
+title: "HW40_Leaflet"
+author: "Sofie Frank Plath"
+date: "2023-10-10"
+output:
+  html_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Library packages
+
+installing the need packages for creating maps with leaflet
+```{r packages}
+library(tidyverse)
+library(googlesheets4)
+library(leaflet)
+library(htmlwidgets)
+```
+
+# Task 1: 
+## Create a Danish equivalent of AUSmap with esri layers, but calling it DANmap
+
+Using leaflet to check if im in the correct area
+
+Latitude: 55° 56' 22.83" N
+Longitude: 9° 30' 56.11" E
+Data is found from https://latitude.to/map/dk/denmark
+
+```{r leaflet}
+leaflet()%>% 
+  setView(9.305611,55.562283 , zoom = 6)%>%
+  addTiles()  
+```
+
+seems about right.
+
+creating a basemap
+```{r basemap}
+dan_1 <- leaflet()%>% 
+  setView(9.305611,55.562283 , zoom = 6)
+
+```
+
+Choosing esri background layers
+```{r esri layers}
+esri <- grep("^Esri", providers, value = TRUE)
+
+for (provider in esri)
+{dan_1 <-dan_1 %>% addProviderTiles(provider, group = provider)}
+
+```
+
+### Creating the object DANmap
+
+```{r}
+DANmap <- dan_1 %>%
+  addLayersControl(baseGroups = names(esri),
+                   options = layersControlOptions(collapsed = FALSE)) %>%
+  addMiniMap(tiles = esri[[1]], toggleDisplay = TRUE,
+             position = "bottomright") %>%
+  addMeasure(
+    position = "bottomleft",
+    primaryLengthUnit = "meters",
+    primaryAreaUnit = "sqmeters",
+    activeColor = "#3D535D",
+    completedColor = "#7D4479") %>% 
+  htmlwidgets::onRender("
+                        function(el, x) {
+                        var myMap = this;
+                        myMap.on('baselayerchange',
+                        function (e) {
+                        myMap.minimap.changeLayer(L.tileLayer.provider(e.name));
+                        })
+                        }") %>% 
+  addControl("", position = "topright")
+DANmap
+```
+
+
+# Task 2
+## Populated with data into the DANmap object you created in Task 1.
+
+### Ading data to leaflet
+In this section you will manually create machine-readable spatial
+data from GoogleMaps: 
+
+Enter the coordinates of your favorite leisure places in Denmark. 
+Extracting them from the URL in googlemaps, adding name and type of monument.
+Remember to copy the coordinates as a string, as just two decimal numbers separated by comma. 
+
+Caveats: Do NOT edit the grey columns! They populate automatically!
+
+Second, read the sheet into R. You will need gmail login information. 
+Watch the console, it may ask you to authenticate or put in the number 
+That corresponds to the account you wish to use.
+
+### Googlesheet reading
+
+Using read_sheet to read the data
+
+```{r Google sheet reading}
+gs4_deauth()
+places <- read_sheet("https://docs.google.com/spreadsheets/d/1PlxsPElZML8LZKyXbqdAYeQCDIvDps2McZx1cTVWSzI/edit#gid=124710918",
+                     col_types = "cccnncnc", range="DigitalMethods")
+glimpse(places)
+
+```
+data is loading
+
+now time to load in the coordinates in the leaflet map
+
+### Loading the coordinates
+
+```{r coordinates}
+leaflet() %>% 
+  addTiles() %>% 
+  addMarkers(lng = places$Longitude, 
+             lat = places$Latitude,
+             popup = places$Description)
+```
+
+load the coordinates in the map and check: are any points missing? Why?
+
+i cant see any points missing only descriptions that are not made. Using the popup = places$Description)" function works i figure?. 
+
+# Task 3:
+## Clustering the points in leaflet
+
+```{r clustering the points}
+DANmap %>%
+  addMarkers(lng = places$Longitude, 
+             lat = places$Latitude,
+             popup = places$Description,
+             clusterOptions = markerClusterOptions())
+```
+
+the clustering of the locations seems to have been working
+
+# Task 4: 
+## Look at the map and consider what it is good for and what not.
+It is good at giving an overall overview over the danish locations and in which region where to find them. It is not good at giving clear directions to the locations and doesn't tell a lot about the locations either. 
+
+
+# Task 5: 
+## How to display notes and classifications in the map.
+
+```{r notes and classifications}
+DANmap %>%
+  leaflet() %>%
+  addTiles() %>%
+  addCircleMarkers(lng = places$Longitude, 
+             lat = places$Latitude,
+             radius = places$Stars1_5*3,
+             weight = 15,
+             color = "red",
+             label = places$Placename,
+             popup = paste("Placename:", places$Placename, 
+                           "<br>Coordinates:", places$Longitude,",",places$Latitude,
+                           "<br>Type:", places$Type,
+                           "<br>Description:", places$Description,
+                           "<br>Stars:", places$Stars1_5))
+             
+```
+By using addCicleMarkers the points get convertet into markers shown as circles. The radius is choosed by the number of stars, which affects the maps viewing. By adding the places$Placenames the names of the locations will hover over the map. The "paste" function is finaly used to multiple the notes in the popup. The "<br>" stands for new line, and thereby makes it possible to put in the notes. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
